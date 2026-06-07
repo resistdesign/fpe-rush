@@ -1,0 +1,3 @@
+# Blender source files are regenerated explicitly by scripts/build_demos.sh.
+# Godot consumes the exported GLBs under demos/glb/.
+

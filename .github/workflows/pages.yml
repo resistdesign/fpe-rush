@@ -1,0 +1,99 @@
+name: Deploy Godot Web
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_RELEASE_TAG: "4.5-stable"
+  GODOT_TEMPLATE_VERSION: "4.5.stable"
+  EXPORT_PRESET: Web
+  EXPORT_DIR: build/web
+
+jobs:
+  deploy:
+    name: Export and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Godot editor and export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot-ci/${{ env.GODOT_RELEASE_TAG }}
+            ~/.local/share/godot/export_templates/${{ env.GODOT_TEMPLATE_VERSION }}
+          key: godot-${{ runner.os }}-${{ runner.arch }}-${{ env.GODOT_RELEASE_TAG }}
+
+      - name: Install Godot
+        shell: bash
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+
+          GODOT_CACHE_DIR="${HOME}/.cache/godot-ci/${GODOT_RELEASE_TAG}"
+          GODOT_BIN="${GODOT_CACHE_DIR}/godot"
+          TEMPLATE_DIR="${HOME}/.local/share/godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+
+          mkdir -p "${GODOT_CACHE_DIR}" "${TEMPLATE_DIR}"
+
+          if [[ ! -x "${GODOT_BIN}" ]]; then
+            curl -L \
+              "https://github.com/godotengine/godot-builds/releases/download/${GODOT_RELEASE_TAG}/Godot_v${GODOT_RELEASE_TAG}_linux.x86_64.zip" \
+              -o "${RUNNER_TEMP}/godot.zip"
+            unzip -q "${RUNNER_TEMP}/godot.zip" -d "${GODOT_CACHE_DIR}"
+            mv "${GODOT_CACHE_DIR}/Godot_v${GODOT_RELEASE_TAG}_linux.x86_64" "${GODOT_BIN}"
+            chmod +x "${GODOT_BIN}"
+          fi
+
+          if [[ ! -f "${TEMPLATE_DIR}/web_release.zip" ]]; then
+            curl -L \
+              "https://github.com/godotengine/godot-builds/releases/download/${GODOT_RELEASE_TAG}/Godot_v${GODOT_RELEASE_TAG}_export_templates.tpz" \
+              -o "${RUNNER_TEMP}/godot_export_templates.tpz"
+            unzip -q "${RUNNER_TEMP}/godot_export_templates.tpz" -d "${RUNNER_TEMP}/godot_templates"
+            cp -R "${RUNNER_TEMP}/godot_templates/templates/." "${TEMPLATE_DIR}/"
+          fi
+
+          echo "${GODOT_CACHE_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Validate project
+        shell: bash
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          SKIP_WEB_EXPORT=1 ./scripts/ci/check.sh
+
+      - name: Export web build
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          rm -rf "${EXPORT_DIR}"
+          mkdir -p "${EXPORT_DIR}"
+          touch build/.gdignore
+          godot --headless --export-release "${EXPORT_PRESET}" "${EXPORT_DIR}/index.html"
+          touch "${EXPORT_DIR}/.nojekyll"
+          printf '%s\n' 'rush.foldedpaperengine.com' > "${EXPORT_DIR}/CNAME"
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ${{ env.EXPORT_DIR }}
+          force_orphan: true
+          cname: rush.foldedpaperengine.com

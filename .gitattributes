@@ -1,0 +1,3 @@
+*.blend !text !filter !merge !diff
+*.glb !text !filter !merge !diff
+*.wav !text !filter !merge !diff

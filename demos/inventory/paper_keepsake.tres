@@ -1,0 +1,11 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/folded_paper_engine/Engine/Inventory/InventoryItemKind.gd" id="1_kind"]
+
+[resource]
+script = ExtResource("1_kind")
+id = "paper_keepsake"
+label = "Paper Keepsake"
+plural_label = "Paper Keepsakes"
+stack_limit = 4
+

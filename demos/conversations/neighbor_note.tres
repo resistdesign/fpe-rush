@@ -1,0 +1,18 @@
+[gd_resource type="Resource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/folded_paper_engine/Engine/Conversation/Conversation.gd" id="1_conversation"]
+[ext_resource type="Script" path="res://addons/folded_paper_engine/Engine/Conversation/Comment.gd" id="2_comment"]
+
+[sub_resource type="Resource" id="NeighborComment"]
+script = ExtResource("2_comment")
+content = "A folded note says: “Small events can carry big feelings. This line came from an FPE Conversation resource.”"
+possible_replies = []
+event_type = "NeighborNoteRead"
+event_data = {"demo": "conversations"}
+
+[resource]
+script = ExtResource("1_conversation")
+conversation_id = "fpe_rush_neighbor_note"
+required_characters = []
+initial_comment = SubResource("NeighborComment")
+
