@@ -2,8 +2,7 @@
 
 ## Current Milestone
 
-Initial production build complete locally on `main`; GitHub publication is the
-remaining step.
+Initial production build is published and deployed from `main`.
 
 ## Completed
 
@@ -20,14 +19,18 @@ remaining step.
 - Added Godot static validation, direct FPE runtime loading for every demo, and
   a verified local web export.
 - Added GitHub Actions deployment modeled on `resistdesign/entailed`.
+- Published the public repository at <https://github.com/resistdesign/fpe-rush>.
+- Verified GitHub Actions run `27100959933` completed successfully.
+- Enabled GitHub Pages from `gh-pages:/`, approved the custom-domain
+  certificate, and enforced HTTPS at <https://rush.foldedpaperengine.com/>.
+- Confirmed Blender, GLB, and WAV assets are ordinary Git blobs; Git LFS is not
+  used.
 
 ## Next Action
 
-Create and push the GitHub repository, then verify the Pages workflow and custom
-domain.
+Run a browser interaction pass across all 16 demos and open focused issues for
+any visual or input polish discovered.
 
 ## Known Risks
 
-- GitHub Pages environment configuration may require one repository API update
-  after the first `gh-pages` deployment.
 - Browser interaction remains the final production smoke test.
