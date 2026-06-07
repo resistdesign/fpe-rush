@@ -65,10 +65,29 @@ def reset_scene() -> None:
     bpy.context.scene.frame_end = 80
 
 
-def material(name: str, color: tuple[float, float, float, float]) -> bpy.types.Material:
+def material(
+    name: str,
+    color: tuple[float, float, float, float],
+    roughness: float = 0.78,
+    metallic: float = 0.0,
+) -> bpy.types.Material:
     mat = bpy.data.materials.new(name)
     mat.diffuse_color = color
+    mat.use_nodes = True
+    shader = mat.node_tree.nodes.get("Principled BSDF")
+    shader.inputs["Base Color"].default_value = color
+    shader.inputs["Roughness"].default_value = roughness
+    shader.inputs["Metallic"].default_value = metallic
+    if color[3] < 1.0:
+        shader.inputs["Alpha"].default_value = color[3]
+        mat.surface_render_method = "DITHERED"
     return mat
+
+
+def soften(obj: bpy.types.Object, width: float = 0.06, segments: int = 3) -> None:
+    modifier = obj.modifiers.new("Soft paper edges", "BEVEL")
+    modifier.width = width
+    modifier.segments = segments
 
 
 def cube(name: str, loc: tuple[float, float, float], scale: tuple[float, float, float], mat: bpy.types.Material) -> bpy.types.Object:
@@ -77,6 +96,7 @@ def cube(name: str, loc: tuple[float, float, float], scale: tuple[float, float, 
     obj.name = name
     obj.scale = scale
     obj.data.materials.append(mat)
+    soften(obj)
     return obj
 
 
@@ -85,6 +105,8 @@ def sphere(name: str, loc: tuple[float, float, float], radius: float, mat: bpy.t
     obj = bpy.context.object
     obj.name = name
     obj.data.materials.append(mat)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
     return obj
 
 
@@ -93,27 +115,31 @@ def cylinder(name: str, loc: tuple[float, float, float], radius: float, depth: f
     obj = bpy.context.object
     obj.name = name
     obj.data.materials.append(mat)
+    soften(obj, 0.035, 3)
     return obj
 
 
-def add_camera(name: str, position: tuple[float, float, float], target: tuple[float, float, float]) -> bpy.types.Object:
+def add_camera(name: str, position: tuple[float, float, float], target: tuple[float, float, float], lens: float = 30.0) -> bpy.types.Object:
     bpy.ops.object.camera_add(location=position)
     cam = bpy.context.object
     cam.name = name
     direction = Vector(target) - cam.location
     cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
-    cam.data.lens = 30
+    cam.data.lens = lens
     return cam
 
 
-def add_text(name: str, text: str, loc: tuple[float, float, float], mat: bpy.types.Material) -> bpy.types.Object:
+def add_text(name: str, text: str, loc: tuple[float, float, float], mat: bpy.types.Material, size: float = 0.26) -> bpy.types.Object:
     bpy.ops.object.text_add(location=loc, rotation=(math.radians(72), 0, 0))
     obj = bpy.context.object
     obj.name = name
     obj.data.body = text
     obj.data.align_x = "CENTER"
     obj.data.align_y = "CENTER"
-    obj.data.size = 0.34
+    obj.data.size = size
+    obj.data.extrude = 0.018
+    obj.data.bevel_depth = 0.008
+    obj.data.bevel_resolution = 2
     obj.data.materials.append(mat)
     return obj
 
@@ -138,21 +164,69 @@ def add_scene_props(demo_id: str, title: str, accent: tuple[float, float, float,
 
 
 def add_base(title: str, accent: tuple[float, float, float, float]) -> dict[str, bpy.types.Object]:
-    paper = material("warm_paper", (0.96, 0.90, 0.78, 1.0))
-    ink = material("soft_ink", (0.28, 0.22, 0.18, 1.0))
-    accent_mat = material("accent", accent)
-    shadow = material("shadow_card", (0.62, 0.53, 0.45, 1.0))
+    paper = material("warm_paper", (0.96, 0.90, 0.78, 1.0), 0.92)
+    ink = material("soft_ink", (0.28, 0.22, 0.18, 1.0), 0.86)
+    accent_mat = material("accent", accent, 0.68)
+    accent_dark = material(
+        "accent_dark",
+        (accent[0] * 0.62, accent[1] * 0.62, accent[2] * 0.62, 1.0),
+        0.76,
+    )
+    shadow = material("shadow_card", (0.38, 0.29, 0.24, 1.0), 0.88)
+    gold = material("warm_brass", (0.72, 0.48, 0.20, 1.0), 0.38, 0.28)
     ground = cube("PaperFloor-col", (0, 0, -0.08), (5.2, 3.3, 0.08), paper)
     ground["fpe_context_props"] = {"Groups": "floor,collidable"}
-    cube("BackCard", (0, 1.82, 1.2), (4.8, 0.08, 1.4), shadow)
-    add_text("TitleLabel", title, (0, 1.68, 2.25), ink)
-    add_camera("OverviewCamera", (0, -5.2, 3.1), (0, 0.3, 0.55))
-    bpy.ops.object.light_add(type="AREA", location=(0, -2.0, 4.0))
-    lamp = bpy.context.object
-    lamp.name = "Softbox"
-    lamp.data.energy = 420
-    lamp.data.size = 4.0
-    return {"paper": paper, "ink": ink, "accent": accent_mat, "shadow": shadow, "ground": ground}
+    cube("BackCard", (0, 1.82, 1.06), (4.8, 0.08, 1.08), accent_dark)
+    cube("StageMat", (0, 0.15, 0.015), (2.45, 1.65, 0.025), shadow)
+    for x in (-3.9, 3.9):
+        cylinder("PaperLantern", (x, 1.5, 1.45), 0.18, 1.65, accent_mat)
+        sphere("LanternGlow", (x, 1.42, 2.2), 0.24, gold)
+    for x in (-3.1, 3.1):
+        cylinder("CardConfetti", (x, 0.85, 0.12), 0.13, 0.12, accent_mat)
+    add_text("TitleLabel", title, (0, 1.68, 1.86), ink, 0.24)
+    add_camera("OverviewCamera", (0, -6.8, 3.5), (0, 0.18, 0.72), 24.0)
+    bpy.ops.object.light_add(type="POINT", location=(-2.8, -2.2, 4.4))
+    key = bpy.context.object
+    key.name = "WarmKey"
+    key.data.energy = 0.024
+    key.data.color = (1.0, 0.74, 0.52)
+    key.data.shadow_soft_size = 2.2
+    key.data.use_custom_distance = True
+    key.data.cutoff_distance = 9.0
+    bpy.ops.object.light_add(type="POINT", location=(3.3, 0.2, 3.0))
+    fill = bpy.context.object
+    fill.name = "CoolFill"
+    fill.data.energy = 0.012
+    fill.data.color = (0.56, 0.72, 1.0)
+    fill.data.shadow_soft_size = 1.8
+    fill.data.use_custom_distance = True
+    fill.data.cutoff_distance = 8.0
+    bpy.ops.object.light_add(type="POINT", location=(0, 0.8, 2.4))
+    glow = bpy.context.object
+    glow.name = "StageGlow"
+    glow.data.energy = 0.006
+    glow.data.color = accent[:3]
+    glow.data.shadow_soft_size = 2.0
+    glow.data.use_custom_distance = True
+    glow.data.cutoff_distance = 5.0
+    world = bpy.context.scene.world
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs["Color"].default_value = (
+        accent[0] * 0.18,
+        accent[1] * 0.18,
+        accent[2] * 0.18,
+        1.0,
+    )
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.28
+    return {
+        "paper": paper,
+        "ink": ink,
+        "accent": accent_mat,
+        "accent_dark": accent_dark,
+        "gold": gold,
+        "shadow": shadow,
+        "ground": ground,
+    }
 
 
 def add_player(materials: dict[str, bpy.types.Material]) -> bpy.types.Object:
