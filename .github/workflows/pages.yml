@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - name: Cache Godot editor and export templates
         uses: actions/cache@v4
